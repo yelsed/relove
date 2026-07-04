@@ -1,0 +1,23 @@
+# relove runtime output created inside games during development
+.relove/
+
+# Logs and generated diagnostics
+*.log
+*.luac
+main.lua.relove-backup
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode-test/
+
+# VS Code extension packaging/build output
+node_modules/
+out/
+dist/
+*.vsix
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

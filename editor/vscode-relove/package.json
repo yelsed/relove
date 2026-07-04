@@ -1,0 +1,31 @@
+{
+  "name": "relove",
+  "displayName": "relove",
+  "description": "Optional diagnostics adapter for the relove LÖVE hot reload runtime.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:relove.refreshStatus",
+    "onCommand:relove.clearDiagnostics"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "relove.refreshStatus",
+        "title": "relove: Refresh Status"
+      },
+      {
+        "command": "relove.clearDiagnostics",
+        "title": "relove: Clear Diagnostics"
+      }
+    ]
+  }
+}
