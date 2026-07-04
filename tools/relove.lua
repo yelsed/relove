@@ -78,6 +78,9 @@ local function ensureRuntime(targetDir)
     local sourceRuntime = join(source, "dev/relove")
     local sourceEntry = join(source, "dev/relove.lua")
     local targetDev = join(targetDir, "dev")
+    local sourceCli = join(source, "tools/relove.lua")
+    local sourceWrapper = join(source, "relove")
+    local targetTools = join(targetDir, "tools")
 
     if not fileExists(sourceEntry) then
         error("could not find relove runtime at " .. sourceEntry)
@@ -89,8 +92,15 @@ local function ensureRuntime(targetDir)
     end
 
     os.execute("mkdir -p " .. shellQuote(targetDev))
+    os.execute("mkdir -p " .. shellQuote(targetTools))
     os.execute("cp -R " .. shellQuote(sourceRuntime) .. " " .. shellQuote(targetDev .. "/"))
     os.execute("cp " .. shellQuote(sourceEntry) .. " " .. shellQuote(join(targetDev, "relove.lua")))
+    os.execute("cp " .. shellQuote(sourceCli) .. " " .. shellQuote(join(targetTools, "relove.lua")))
+    if fileExists(sourceWrapper) then
+        os.execute("cp " .. shellQuote(sourceWrapper) .. " " .. shellQuote(join(targetDir, "relove")))
+        os.execute("chmod +x " .. shellQuote(join(targetDir, "relove")))
+    end
+    os.execute("chmod +x " .. shellQuote(join(targetTools, "relove.lua")))
     os.execute("mkdir -p " .. shellQuote(join(targetDir, ".relove")))
 end
 
