@@ -92,23 +92,21 @@ function Registry.listWatchedFiles()
         }
     end
 
-    if fileInfo("main.lua") then
+    local mainInfo = fileInfo("main.lua")
+    if mainInfo then
         files["main.lua"] = {
             kind = "main",
             path = "main.lua",
-            modtime = select(2, pcall(function()
-                return love.filesystem.getInfo("main.lua", "file").modtime or 0
-            end)) or 0,
+            modtime = mainInfo.modtime or 0,
         }
     end
 
-    if fileInfo("conf.lua") then
+    local configInfo = fileInfo("conf.lua")
+    if configInfo then
         files["conf.lua"] = {
             kind = "config",
             path = "conf.lua",
-            modtime = select(2, pcall(function()
-                return love.filesystem.getInfo("conf.lua", "file").modtime or 0
-            end)) or 0,
+            modtime = configInfo.modtime or 0,
         }
     end
 

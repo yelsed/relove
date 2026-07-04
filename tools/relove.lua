@@ -145,10 +145,10 @@ local function removeBlock(targetDir)
         error("relove start marker exists without end marker")
     end
 
+    -- endPos lands on the newline the block appended after endMarker; sub(endPos + 1)
+    -- already excludes it, so don't eat a second newline (that was deleting a real
+    -- blank line from the user's main.lua).
     endPos = endPos + #endMarker
-    if content:sub(endPos + 1, endPos + 1) == "\n" then
-        endPos = endPos + 1
-    end
 
     writeFile(path, content:sub(1, startPos - 1) .. content:sub(endPos + 1))
     print("removed relove block from " .. path)

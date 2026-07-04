@@ -25,6 +25,15 @@ local function shellQuote(value)
 end
 
 local function getInfo(path)
+    -- Prefer LÖVE's getInfo: it reports modtime, which lets scan() skip the
+    -- expensive checksum when a file is untouched. io.open only gives size.
+    if love and love.filesystem then
+        local info = love.filesystem.getInfo(path, "file")
+        if info then
+            return { size = info.size or 0, modtime = info.modtime or 0 }
+        end
+    end
+
     local file = io.open(sourcePath(path), "r")
     if file then
         local size = file:seek("end") or 0
@@ -32,11 +41,7 @@ local function getInfo(path)
         return { size = size, modtime = 0 }
     end
 
-    if not love or not love.filesystem then
-        return nil
-    end
-
-    return love.filesystem.getInfo(path, "file")
+    return nil
 end
 
 local function checksum(path)
@@ -89,13 +94,21 @@ function Watcher:scan()
         local info = getInfo(path)
         if info then
             local previous = self.files[path]
-            local signature = checksum(path)
 
-            if previous and previous.signature ~= signature then
-                self:remember(path, entry, info, signature)
-                self.reloader:reloadPath(path, entry.kind)
-            elseif not previous then
-                self:remember(path, entry, info, signature)
+            if not previous then
+                -- First sighting: record a baseline (one checksum) without reloading.
+                self:remember(path, entry, info, nil)
+            -- ponytail: modtime has ~1s resolution, so two same-size edits inside
+            -- one second are missed; acceptable to avoid a checksum per file per poll.
+            elseif previous.modtime ~= info.modtime or previous.size ~= info.size then
+                local signature = checksum(path)
+                if previous.signature ~= signature then
+                    self:remember(path, entry, info, signature)
+                    self.reloader:reloadPath(path, entry.kind)
+                else
+                    -- Metadata moved but content is identical; refresh stored stats.
+                    self:remember(path, entry, info, signature)
+                end
             end
         end
     end

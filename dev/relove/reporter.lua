@@ -1,9 +1,27 @@
 local Reporter = {}
 
+-- Anchor state to the project source dir so status/logs land where the editor
+-- looks (<project>/.relove), regardless of the cwd the game was launched from.
+local function projectBase()
+    if love and love.filesystem and love.filesystem.getSource then
+        return love.filesystem.getSource()
+    end
+
+    return "."
+end
+
+local base = projectBase()
+local stateDir = base .. "/.relove"
+
 Reporter.lastMessage = nil
-Reporter.statusPath = ".relove/status.json"
-Reporter.errorLogPath = ".relove/errors.log"
-Reporter.eventLogPath = ".relove/events.log"
+Reporter.statePath = stateDir
+Reporter.statusPath = stateDir .. "/status.json"
+Reporter.errorLogPath = stateDir .. "/errors.log"
+Reporter.eventLogPath = stateDir .. "/events.log"
+
+local function shellQuote(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
 
 local function escapeJsonString(value)
     value = tostring(value or "")
@@ -43,11 +61,14 @@ local function encodeJson(value)
 end
 
 local function ensureProjectStateDir()
-    local ok = pcall(function()
-        os.execute('mkdir -p .relove')
-    end)
+    -- os.execute returns the exit status (0 or true on success), it never raises,
+    -- so inspect the return value rather than wrapping it in pcall.
+    local ok = os.execute("mkdir -p " .. shellQuote(Reporter.statePath))
+    if ok == true or ok == 0 then
+        return
+    end
 
-    if not ok and love and love.filesystem then
+    if love and love.filesystem then
         love.filesystem.createDirectory(".relove")
     end
 end

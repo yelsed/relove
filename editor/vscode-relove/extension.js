@@ -5,6 +5,7 @@ const vscode = require('vscode');
 let diagnostics;
 let statusBar;
 let watchers = [];
+const folderDiagnosticUris = new Map();
 
 function activate(context) {
   diagnostics = vscode.languages.createDiagnosticCollection('relove');
@@ -37,7 +38,7 @@ function startWatchers(context) {
     watcher.onDidCreate(() => refreshWorkspace(folder));
     watcher.onDidChange(() => refreshWorkspace(folder));
     watcher.onDidDelete(() => {
-      diagnostics.clear();
+      clearFolderDiagnostic(folder);
       statusBar.text = 'relove: no status';
     });
 
@@ -98,13 +99,28 @@ function applyStatus(folder, status) {
     return;
   }
 
-  diagnostics.clear();
+  clearFolderDiagnostic(folder);
   statusBar.text = `relove: ${status.status}`;
+}
+
+function clearFolderDiagnostic(folder) {
+  const previous = folderDiagnosticUris.get(folder.uri.fsPath);
+  if (previous) {
+    diagnostics.delete(previous);
+    folderDiagnosticUris.delete(folder.uri.fsPath);
+  }
 }
 
 function publishDiagnostic(folder, status) {
   const file = status.file || 'main.lua';
   const absolutePath = path.isAbsolute(file) ? file : path.join(folder.uri.fsPath, file);
+
+  // status.file may be a callback label ("love.update") rather than a real path
+  // for runtime errors; don't attach a diagnostic to a file that doesn't exist.
+  if (!fs.existsSync(absolutePath)) {
+    return;
+  }
+
   const uri = vscode.Uri.file(absolutePath);
   const line = Math.max(0, Number(status.line || extractLine(status.message) || 1) - 1);
   const range = new vscode.Range(line, 0, line, 200);
@@ -116,6 +132,9 @@ function publishDiagnostic(folder, status) {
 
   diagnostic.source = 'relove';
   diagnostic.code = status.usingLastGood ? 'using-last-good' : undefined;
+
+  clearFolderDiagnostic(folder);
+  folderDiagnosticUris.set(folder.uri.fsPath, uri);
   diagnostics.set(uri, [diagnostic]);
 }
 
@@ -132,6 +151,8 @@ function clearDiagnostics() {
   if (diagnostics) {
     diagnostics.clear();
   }
+
+  folderDiagnosticUris.clear();
 
   if (statusBar) {
     statusBar.text = 'relove: cleared';

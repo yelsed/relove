@@ -134,7 +134,7 @@ function Reloader:reloadModule(record)
         return false
     end
 
-    local _, syntaxError = compile(path, content)
+    local loader, syntaxError = compile(path, content)
     if syntaxError then
         local status = { status = "error", file = path, message = syntaxError, usingLastGood = true }
         self:report(status)
@@ -145,9 +145,16 @@ function Reloader:reloadModule(record)
     local oldPackageValue = package.loaded[name]
     package.loaded[name] = nil
 
+    -- Run the chunk we already compiled instead of making require re-read and
+    -- re-compile the file; the preload searcher runs before LÖVE's own loader.
+    local oldPreload = package.preload[name]
+    package.preload[name] = loader
+
     local ok, newExportOrError = xpcall(function()
         return self.registry.originalRequire(name)
     end, debug.traceback)
+
+    package.preload[name] = oldPreload
 
     if not ok then
         package.loaded[name] = oldPackageValue

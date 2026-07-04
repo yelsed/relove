@@ -20,10 +20,16 @@ local function safeCall(runtime, label, fn, ...)
     end, traceback)
 
     if not ok then
+        local message = tostring(result):match("^[^\n]+") or tostring(result)
+        -- Lua errors read "path/to/file.lua:LINE: message"; pull the real culprit
+        -- out so diagnostics land on source instead of the callback label.
+        local sourceFile, sourceLine = message:match("([%w_%-%./]+%.lua):(%d+)")
         local status = {
             status = "error",
-            file = label,
-            message = tostring(result):match("^[^\n]+") or tostring(result),
+            file = sourceFile or label,
+            line = sourceLine and tonumber(sourceLine) or nil,
+            label = label,
+            message = message,
             stack = tostring(result),
             usingLastGood = true,
         }
@@ -87,12 +93,13 @@ local function installRunLoop(runtime)
                         end
                     end
 
+                    local consumed = false
                     if name == "keypressed" then
-                        Overlay.keypressed(a)
+                        consumed = Overlay.keypressed(a)
                     end
 
                     local handler = love.handlers and love.handlers[name]
-                    if handler then
+                    if handler and not consumed then
                         safeCall(runtime, "love.handlers." .. name, handler, a, b, c, d, e, f)
                     end
                 end
