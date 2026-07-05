@@ -20,10 +20,6 @@ local function sourcePath(path)
     return path
 end
 
-local function shellQuote(value)
-    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
 local function getInfo(path)
     -- Prefer LÖVE's getInfo: it reports modtime, which lets scan() skip the
     -- expensive checksum when a file is untouched. io.open only gives size.
@@ -45,23 +41,20 @@ local function getInfo(path)
 end
 
 local function checksum(path)
-    local handle = io.popen("cksum " .. shellQuote(sourcePath(path)))
-    if handle then
-        local line = handle:read("*l")
-        handle:close()
-        if line and line ~= "" then
-            return line
-        end
-    end
-
-    local file = io.open(sourcePath(path), "r")
+    -- Pure-Lua rolling hash: portable (no `cksum`), and only runs after the
+    -- getInfo modtime/size gate, so it isn't paid for untouched files.
     local content
 
-    if file then
-        content = file:read("*a")
-        file:close()
-    else
+    if love and love.filesystem and love.filesystem.read then
         content = love.filesystem.read(path)
+    end
+
+    if not content then
+        local file = io.open(sourcePath(path), "r")
+        if file then
+            content = file:read("*a")
+            file:close()
+        end
     end
 
     if not content then

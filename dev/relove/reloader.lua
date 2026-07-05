@@ -8,17 +8,13 @@ local function sourcePath(path)
     return path
 end
 
-local function shellQuote(value)
-    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
 local function readFile(path)
-    local handle = io.popen("cat " .. shellQuote(sourcePath(path)))
-    if handle then
-        local content = handle:read("*a")
-        local ok = handle:close()
-        if ok and content then
-            return content, #content
+    -- love.filesystem.read is portable (no shell) and reads fresh from physfs.
+    -- io.open is the fallback for non-LÖVE contexts (tests, CLI reuse).
+    if love and love.filesystem and love.filesystem.read then
+        local content, size = love.filesystem.read(path)
+        if content then
+            return content, size
         end
     end
 
@@ -29,8 +25,7 @@ local function readFile(path)
         return content, #content
     end
 
-    local content, size = love.filesystem.read(path)
-    return content, size
+    return nil
 end
 
 local function compile(path, content)

@@ -14,7 +14,9 @@ The goal is not to turn your game into a framework project. `relove` sits beside
 
 Prototype / early development.
 
-Works best today on Linux-like systems because file change detection currently shells out to `cksum` and `cat` for reliable source-file reads while the game is running.
+Runs on Linux, macOS, and Windows. File change detection and source reads use
+`love.filesystem` and a pure-Lua hash, so the hot path needs no shell utilities.
+Directory creation is the one remaining OS call and is handled per platform.
 
 The core design is intentionally small and boring:
 
@@ -65,16 +67,17 @@ end
 
 ## Prerequisites
 
-Current `relove` is Linux/POSIX-first.
+`relove` runs on Linux, macOS, and Windows.
 
 You need:
 
 - LÖVE installed and runnable as `love`
 - a standalone `lua` executable on `PATH`
-- a POSIX shell for the `relove` wrapper
-- POSIX utilities used by the installer/runtime: `mkdir`, `cp`, `chmod`, `cksum`, and `cat`
+- a shell to run a wrapper: POSIX `sh` uses `relove`; Windows `cmd` uses `relove.bat`
 
-This means Windows is not supported yet without a portability pass. A Windows-ready version should replace the shell wrapper, installer copy commands, and file checksum/read backend with portable implementations.
+The installer copies runtime files in pure Lua (no `cp`/`cksum`/`cat`). The only
+shell command still used is `mkdir` (POSIX `mkdir -p`, Windows `mkdir`), because
+Lua cannot create a directory on its own. Run `relove doctor` to check your setup.
 
 ## Installation
 
@@ -151,6 +154,7 @@ From a game project where `relove` has been installed:
 ./relove run .
 ./relove status .
 ./relove logs .
+./relove doctor .
 ```
 
 From this package repository:
@@ -197,6 +201,17 @@ Prints the event history from:
 ```
 
 This is useful for agents, editor integrations, and terminal-based helpers.
+
+### `relove doctor`
+
+Checks a game's setup and prints a pass/fail report:
+
+- `love` runnable on `PATH`
+- runtime present (`dev/relove/init.lua`)
+- `main.lua` contains the relove block
+- `.relove/` is writable
+
+Useful right after `init`, and as a quick health check for agents.
 
 ## Runtime feedback files
 
@@ -455,28 +470,20 @@ or guard it behind your own development flag.
 
 ## Platform notes
 
-Current `relove` is Linux/POSIX-first.
+`relove` runs on Linux, macOS, and Windows.
 
 The CLI/install path uses:
 
 ```text
-sh
-lua
-mkdir
-cp
-chmod
+lua        (runs the CLI)
+mkdir      (POSIX `mkdir -p`, Windows `mkdir`; the one unavoidable shell call)
 ```
 
-The watcher/reloader backend uses:
+Runtime files are copied in pure Lua; the wrapper is `relove` (POSIX) or
+`relove.bat` (Windows).
 
-```text
-cksum
-cat
-```
-
-That makes the current implementation Linux-friendly and likely macOS-friendly if those commands are available.
-
-Windows support should replace the shell wrapper, install commands, file-reading backend, and checksum backend with portable implementations.
+The watcher/reloader backend is shell-free: it reads source files with
+`love.filesystem.read` and hashes them with a pure-Lua rolling checksum.
 
 ## Troubleshooting
 
@@ -530,7 +537,7 @@ Restart the game. LÖVE reads `conf.lua` before the game starts.
 Before publishing this repository for general use:
 
 - choose and add a license
-- decide whether Windows support is required for v1
+- verify the Windows path end-to-end on a real Windows machine (logic is portable; not yet run there)
 - add automated tests for the watcher/reloader
 - add installation examples for common project layouts
 - decide whether the VS Code adapter should be packaged as a real extension
