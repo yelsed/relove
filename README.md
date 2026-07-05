@@ -669,7 +669,7 @@ Before publishing this repository for general use:
 
 - choose and add a license
 - verify the Windows path end-to-end on a real Windows machine (logic is portable; not yet run there)
-- add automated tests for the watcher/reloader
+- automated tests: done — run `test/run.sh` (see `test/README.md`)
 - add installation examples for common project layouts
 - decide whether the VS Code adapter should be packaged as a real extension
 
