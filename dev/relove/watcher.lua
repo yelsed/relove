@@ -6,10 +6,42 @@ function Watcher.new(registry, reloader, options)
     return setmetatable({
         registry = registry,
         reloader = reloader,
-        interval = options.interval or 0.15,
+        -- Guard types here too: a bad config value must fall back, never crash.
+        interval = type(options.interval) == "number" and options.interval or 0.15,
+        ignore = type(options.ignore) == "table" and options.ignore or nil,
         elapsed = 0,
         files = {},
     }, { __index = Watcher })
+end
+
+-- A trailing-slash glob (vendor/) is a directory prefix; otherwise `*`/`?` match
+-- against the full path or the basename (so *.min.lua catches nested files too).
+local function matchesGlob(path, glob)
+    if glob:sub(-1) == "/" then
+        return path:sub(1, #glob) == glob
+    end
+
+    local pattern = "^" .. glob:gsub("[%.%-%+%(%)%[%]%^%$%%]", "%%%0"):gsub("%*", ".*"):gsub("%?", ".") .. "$"
+    if path:match(pattern) then
+        return true
+    end
+
+    local base = path:match("[^/]+$")
+    return base ~= nil and base:match(pattern) ~= nil
+end
+
+function Watcher:isIgnored(path)
+    if not self.ignore then
+        return false
+    end
+
+    for _, glob in ipairs(self.ignore) do
+        if matchesGlob(path, glob) then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function sourcePath(path)
@@ -85,7 +117,7 @@ function Watcher:scan()
 
     for path, entry in pairs(watched) do
         local info = getInfo(path)
-        if info then
+        if info and not self:isIgnored(path) then
             local previous = self.files[path]
 
             if not previous then

@@ -136,12 +136,66 @@ local function installRunLoop(runtime)
     end
 end
 
+-- Coerce/validate the fields that reach un-pcall'd runtime code, so a malformed
+-- .relove.lua (interval = "fast", ignore = "vendor/") can't crash startup.
+local function sanitizeConfig(config)
+    if config.interval ~= nil and type(config.interval) ~= "number" then
+        local coerced = tonumber(config.interval)
+        if not coerced then
+            print("[relove] .relove.lua: interval must be a number; ignoring it")
+        end
+        config.interval = coerced
+    end
+
+    if config.ignore ~= nil and type(config.ignore) ~= "table" then
+        if type(config.ignore) == "string" then
+            config.ignore = { config.ignore }
+        else
+            print("[relove] .relove.lua: ignore must be a list of globs; ignoring it")
+            config.ignore = nil
+        end
+    end
+
+    return config
+end
+
+-- Optional `.relove.lua` returns a table of defaults (interval, overlayKey,
+-- overlay, ignore). Inline start(options) wins over the file. A broken config is
+-- ignored (with a warning) rather than blocking startup.
+local function loadConfig()
+    if not (love and love.filesystem and love.filesystem.getInfo(".relove.lua")) then
+        return {}
+    end
+
+    local chunk, loadError = love.filesystem.load(".relove.lua")
+    if not chunk then
+        print("[relove] ignoring .relove.lua: " .. tostring(loadError))
+        return {}
+    end
+
+    local ok, result = pcall(chunk)
+    if ok and type(result) == "table" then
+        return sanitizeConfig(result)
+    end
+
+    print("[relove] ignoring .relove.lua: " .. tostring(result))
+    return {}
+end
+
 function Relove.start(options)
     if Relove.started then
         return Relove
     end
 
     options = options or {}
+
+    local config = loadConfig()
+    for key, value in pairs(config) do
+        if options[key] == nil then
+            options[key] = value
+        end
+    end
+
     Relove.started = true
     Relove.options = options
 
@@ -151,6 +205,7 @@ function Relove.start(options)
     Relove.reloader = Reloader.new(Registry, Reporter, Overlay)
     Relove.watcher = Watcher.new(Registry, Relove.reloader, {
         interval = options.interval or options.pollInterval or 0.15,
+        ignore = options.ignore,
     })
 
     installRunLoop(Relove)

@@ -133,9 +133,61 @@ function publishDiagnostic(folder, status) {
   diagnostic.source = 'relove';
   diagnostic.code = status.usingLastGood ? 'using-last-good' : undefined;
 
+  const frames = parseStackFrames(status.stack, folder);
+  if (frames.length) {
+    diagnostic.relatedInformation = frames;
+  }
+
   clearFolderDiagnostic(folder);
   folderDiagnosticUris.set(folder.uri.fsPath, uri);
   diagnostics.set(uri, [diagnostic]);
+}
+
+// Turn a Lua traceback (status.stack) into clickable related-information entries,
+// one per stack frame that resolves to a real file. Newest frame first.
+function parseStackFrames(stack, folder) {
+  if (!stack) {
+    return [];
+  }
+
+  const frames = [];
+  const seen = new Set();
+  const framePattern = /([\w\-./]+\.lua):(\d+)/;
+
+  for (const rawLine of String(stack).split('\n')) {
+    // The unanchored pattern backtracks quadratically on a long run of path-like
+    // characters; a genuine traceback frame is short, so skip pathological lines.
+    if (rawLine.length > 2048) {
+      continue;
+    }
+
+    const match = rawLine.match(framePattern);
+    if (!match) {
+      continue;
+    }
+
+    const file = match[1];
+    const lineNumber = Math.max(0, Number(match[2]) - 1);
+    const absolutePath = path.isAbsolute(file) ? file : path.join(folder.uri.fsPath, file);
+    const key = `${absolutePath}:${lineNumber}`;
+
+    if (seen.has(key) || !fs.existsSync(absolutePath)) {
+      continue;
+    }
+    seen.add(key);
+
+    const location = new vscode.Location(
+      vscode.Uri.file(absolutePath),
+      new vscode.Range(lineNumber, 0, lineNumber, 200)
+    );
+    frames.push(new vscode.DiagnosticRelatedInformation(location, rawLine.trim() || `${file}:${lineNumber + 1}`));
+
+    if (frames.length >= 12) {
+      break;
+    }
+  }
+
+  return frames;
 }
 
 function extractLine(message) {
@@ -162,4 +214,5 @@ function clearDiagnostics() {
 module.exports = {
   activate,
   deactivate,
+  parseStackFrames,
 };

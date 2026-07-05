@@ -284,6 +284,36 @@ Press `F8` to toggle the overlay.
 
 When reload fails, the overlay shows that the game is using last-good code.
 
+## Configuration
+
+Options can be passed inline to `start(...)`:
+
+```lua
+require("dev.relove").start({ interval = 0.1, overlayKey = "f9" })
+```
+
+Or placed in an optional `.relove.lua` file at the project root, which returns a
+table:
+
+```lua
+-- .relove.lua
+return {
+    interval = 0.1,          -- poll interval in seconds (default 0.15)
+    overlayKey = "f9",       -- overlay toggle key (default f8)
+    overlay = true,          -- set false to disable the overlay entirely
+    ignore = {               -- paths/globs to never watch or reload
+        "vendor/",           -- trailing slash = directory prefix
+        "*.min.lua",         -- * and ? glob the full path or basename
+    },
+}
+```
+
+Inline `start(options)` wins over `.relove.lua` for any key set in both. A broken
+`.relove.lua` is ignored (with a printed warning) rather than blocking startup.
+
+`ignore` applies to every watched file, so an over-broad glob like `*.lua` also
+silences `main.lua`/`conf.lua` restart detection — keep ignore globs specific.
+
 ## Recommended module style
 
 `relove` works best with modules that return tables.
@@ -413,46 +443,49 @@ end
 
 The actual reloadable logic lives in `src/` modules.
 
-## Optional VS Code adapter
+## Optional editor adapters
 
-The repository includes a minimal VS Code adapter:
-
-```text
-editor/vscode-relove/
-  package.json
-  extension.js
-```
-
-It watches:
+The repository includes minimal adapters for VS Code and Neovim:
 
 ```text
-.relove/status.json
+editor/vscode-relove/    # package.json + extension.js
+editor/nvim-relove/      # lua/relove.lua + README
+editor/PROTOCOL.md       # the editor-agnostic status.json contract
 ```
 
-and turns `relove` errors into editor diagnostics.
+Both watch `.relove/status.json` and turn `relove` errors into editor
+diagnostics. The VS Code adapter also parses the error `stack` into clickable
+related-information frames.
 
-The adapter is optional. Hot reload works without it.
+The adapters are optional; hot reload works without them. To write your own
+(Emacs, a TUI, an agent), follow the versioned contract in
+[`editor/PROTOCOL.md`](editor/PROTOCOL.md).
 
 ## Package layout
 
 ```text
 relove
-├── relove                         # shell wrapper for the CLI
+├── relove                         # POSIX shell wrapper for the CLI
+├── relove.bat                     # Windows wrapper for the CLI
 ├── tools/
 │   └── relove.lua                 # CLI implementation
 ├── dev/
 │   ├── relove.lua                 # runtime entrypoint copied into games
 │   └── relove/
-│       ├── init.lua               # starts runtime and custom run loop
+│       ├── init.lua               # starts runtime, loads config, custom run loop
 │       ├── module_registry.lua    # tracks required modules
-│       ├── watcher.lua            # detects source changes
-│       ├── reloader.lua           # reloads modules safely
+│       ├── watcher.lua            # detects source changes, applies ignore globs
+│       ├── reloader.lua           # reloads modules safely, runs hooks
 │       ├── reporter.lua           # writes status/log files
-│       └── overlay.lua            # draws in-game feedback
+│       └── overlay.lua            # draws in-game feedback + history
 └── editor/
-    └── vscode-relove/
-        ├── package.json
-        └── extension.js
+    ├── PROTOCOL.md                # editor-agnostic status.json contract
+    ├── vscode-relove/
+    │   ├── package.json
+    │   └── extension.js
+    └── nvim-relove/
+        ├── README.md
+        └── lua/relove.lua
 ```
 
 ## How it works
