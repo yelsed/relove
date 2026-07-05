@@ -26,6 +26,7 @@ local runtimeModules = {
     "reloader.lua",
     "reporter.lua",
     "overlay.lua",
+    "assets.lua",
 }
 
 -- Quote a path for os.execute. Windows cmd.exe uses double quotes; POSIX sh uses

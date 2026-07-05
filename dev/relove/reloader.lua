@@ -52,11 +52,14 @@ local function shallowPatchTable(old, new)
     end
 end
 
-function Reloader.new(registry, reporter, overlay)
+function Reloader.new(registry, reporter, overlay, options)
+    options = options or {}
+
     return setmetatable({
         registry = registry,
         reporter = reporter,
         overlay = overlay,
+        reloadMain = options.reloadMain,
     }, { __index = Reloader })
 end
 
@@ -70,6 +73,9 @@ end
 
 function Reloader:reloadPath(path, kind)
     if kind == "main" then
+        if self.reloadMain then
+            return self:reloadMainChunk(path)
+        end
         self:validateRestartOnly(path, "main.lua changed; restart required. relove will not hot reload boot code because it can duplicate state or reset callbacks.")
         return
     end
@@ -114,6 +120,47 @@ function Reloader:validateRestartOnly(path, message)
     if self.overlay then
         self.overlay.setStatus({ status = "restart_required", file = path, message = message, usingLastGood = true })
     end
+end
+
+-- Opt-in (start{ reloadMain = true }). Re-runs main.lua so edited love.* callbacks
+-- take effect without a restart. It does NOT re-call love.load; live state kept in
+-- modules survives (they hot-reload separately). Any file-scope work in main.lua
+-- re-runs, so this is best for a thin main.lua that only wires callbacks.
+function Reloader:reloadMainChunk(path)
+    local content = readFile(path)
+    if not content then
+        self:report({ status = "error", file = path, message = "could not read file", usingLastGood = true })
+        return false
+    end
+
+    local loader, syntaxError = compile(path, content)
+    if syntaxError then
+        self:report({ status = "error", file = path, message = syntaxError, usingLastGood = true })
+        return false
+    end
+
+    local ok, err = xpcall(loader, debug.traceback)
+    if not ok then
+        -- Unlike a module reload, we can't roll back a half-run boot chunk: some
+        -- callbacks may already be re-bound. Report honestly that we are NOT on
+        -- clean last-good code.
+        self:report({
+            status = "error",
+            file = path,
+            message = (tostring(err):match("^[^\n]+") or tostring(err)) .. " (main.lua ran partway; state may be inconsistent)",
+            stack = tostring(err),
+            usingLastGood = false,
+        })
+        return false
+    end
+
+    self:report({
+        status = "ok",
+        file = path,
+        message = "reloaded main.lua (callbacks re-bound; boot code re-ran)",
+        usingLastGood = false,
+    })
+    return true
 end
 
 function Reloader:reloadModule(record)

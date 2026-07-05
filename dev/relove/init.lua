@@ -3,6 +3,7 @@ local Reporter = require("dev.relove.reporter")
 local Overlay = require("dev.relove.overlay")
 local Reloader = require("dev.relove.reloader")
 local Watcher = require("dev.relove.watcher")
+local Assets = require("dev.relove.assets")
 
 local Relove = {
     _version = "0.1.0",
@@ -113,6 +114,10 @@ local function installRunLoop(runtime)
                 runtime.watcher:update(dt)
             end
 
+            if runtime.assets then
+                runtime.assets:update(dt)
+            end
+
             if love.update then
                 safeCall(runtime, "love.update", love.update, dt)
             end
@@ -202,10 +207,15 @@ function Relove.start(options)
     Overlay.configure(options)
     Registry.install()
 
-    Relove.reloader = Reloader.new(Registry, Reporter, Overlay)
+    Relove.reloader = Reloader.new(Registry, Reporter, Overlay, {
+        reloadMain = options.reloadMain,
+    })
     Relove.watcher = Watcher.new(Registry, Relove.reloader, {
         interval = options.interval or options.pollInterval or 0.15,
         ignore = options.ignore,
+    })
+    Relove.assets = Assets.new(Reporter, Overlay, {
+        interval = options.interval or options.pollInterval or 0.15,
     })
 
     installRunLoop(Relove)
@@ -221,6 +231,20 @@ function Relove.start(options)
     Reporter.write(status)
 
     return Relove
+end
+
+-- Opt-in asset accessors. A game that loads assets through these gets hot reload;
+-- one that doesn't is unaffected. Return nil before start() so callers fail loudly.
+function Relove.image(path)
+    return Relove.assets and Relove.assets:image(path)
+end
+
+function Relove.shader(path)
+    return Relove.assets and Relove.assets:shader(path)
+end
+
+function Relove.audio(path, sourceType)
+    return Relove.assets and Relove.assets:audio(path, sourceType)
 end
 
 function Relove.status()
