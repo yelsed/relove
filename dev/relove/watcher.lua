@@ -96,8 +96,15 @@ function Watcher:scan()
             elseif previous.modtime ~= info.modtime or previous.size ~= info.size then
                 local signature = checksum(path)
                 if previous.signature ~= signature then
-                    self:remember(path, entry, info, signature)
-                    self.reloader:reloadPath(path, entry.kind)
+                    local _, reason = self.reloader:reloadPath(path, entry.kind)
+                    if reason == "vetoed" then
+                        -- Keep the new modtime/size so we don't retry every poll, but
+                        -- keep the OLD signature so the next save (even identical bytes)
+                        -- re-attempts the vetoed reload. Honors "a re-save re-attempts".
+                        self:remember(path, entry, info, previous.signature)
+                    else
+                        self:remember(path, entry, info, signature)
+                    end
                 else
                     -- Metadata moved but content is identical; refresh stored stats.
                     self:remember(path, entry, info, signature)

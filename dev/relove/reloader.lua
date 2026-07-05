@@ -88,7 +88,7 @@ function Reloader:reloadPath(path, kind)
         return
     end
 
-    self:reloadModule(record)
+    return self:reloadModule(record)
 end
 
 function Reloader:validateRestartOnly(path, message)
@@ -137,6 +137,23 @@ function Reloader:reloadModule(record)
     end
 
     local oldExport = record.exported
+
+    -- A module can veto a reload it can't safely take right now (e.g. a suspended
+    -- coroutine or an in-flight critical section). __accept runs on the old export
+    -- before the new chunk executes, so a veto has no side effects. Return false to
+    -- veto; nil/true lets the reload proceed. A re-save re-attempts.
+    if type(oldExport) == "table" and type(oldExport.__accept) == "function" then
+        local called, accepted, reason = pcall(oldExport.__accept, oldExport)
+        if called and accepted == false then
+            local message = "reload vetoed by " .. name
+            if reason then
+                message = message .. ": " .. tostring(reason)
+            end
+            self:report({ status = "vetoed", file = path, message = message, usingLastGood = true })
+            return false, "vetoed"
+        end
+    end
+
     local oldPackageValue = package.loaded[name]
     package.loaded[name] = nil
 

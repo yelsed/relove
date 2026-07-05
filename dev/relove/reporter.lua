@@ -129,6 +129,8 @@ function Reporter.write(payload)
     ensureProjectStateDir()
 
     payload.updatedAt = payload.updatedAt or now()
+    -- Stamp the contract version so editor/agent adapters can evolve safely.
+    payload.schemaVersion = payload.schemaVersion or 1
 
     local encoded = encodeJson(payload)
     writeFile(Reporter.statusPath, encoded .. "\n")

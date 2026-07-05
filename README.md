@@ -231,6 +231,7 @@ Example:
 
 ```json
 {
+  "schemaVersion": 1,
   "status": "ok",
   "file": "src/settings.lua",
   "message": "reloaded src.settings",
@@ -274,7 +275,10 @@ relove: info
 relove: ok
 relove: error
 relove: restart_required
+relove: vetoed
 ```
+
+Below the current status, the overlay lists the last few reload events as history.
 
 Press `F8` to toggle the overlay.
 
@@ -313,6 +317,43 @@ end
 ```
 
 Function-returning modules can be reloaded, but old local references may still point at the previous function.
+
+## Per-module reload hooks
+
+A table-returning module can define optional hooks that `relove` calls during a
+reload. All are optional; a module that defines none reloads normally.
+
+```lua
+local Scene = {}
+
+-- Called just before the reload, on the OLD module. Return false to veto a
+-- reload the module can't safely take right now (e.g. a suspended coroutine or
+-- an in-flight transaction). The new chunk is not executed on a veto, so it has
+-- no side effects. A re-save re-attempts. An optional second return is shown as
+-- the reason.
+function Scene.__accept(old)
+    if old.transition and old.transition:isRunning() then
+        return false, "mid-transition"
+    end
+end
+
+-- Called on the OLD module right before its table is patched, so it can release
+-- resources it owns (timers, threads, canvases).
+function Scene.__dispose(old)
+    if old.canvas then old.canvas:release() end
+end
+
+-- Called on the patched module after the reload, with the freshly loaded table,
+-- so it can migrate or re-derive state.
+function Scene.__hotreload(current, incoming)
+    current.version = (current.version or 0) + 1
+end
+
+return Scene
+```
+
+When `__accept` vetoes, `relove` keeps the running code and reports status
+`vetoed` (the file changed on disk but was not applied).
 
 ## `main.lua` and `conf.lua`
 
