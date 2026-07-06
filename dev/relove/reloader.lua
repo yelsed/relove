@@ -8,17 +8,13 @@ local function sourcePath(path)
     return path
 end
 
-local function shellQuote(value)
-    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
-end
-
 local function readFile(path)
-    local handle = io.popen("cat " .. shellQuote(sourcePath(path)))
-    if handle then
-        local content = handle:read("*a")
-        local ok = handle:close()
-        if ok and content then
-            return content, #content
+    -- love.filesystem.read is portable (no shell) and reads fresh from physfs.
+    -- io.open is the fallback for non-LÖVE contexts (tests, CLI reuse).
+    if love and love.filesystem and love.filesystem.read then
+        local content, size = love.filesystem.read(path)
+        if content then
+            return content, size
         end
     end
 
@@ -29,8 +25,7 @@ local function readFile(path)
         return content, #content
     end
 
-    local content, size = love.filesystem.read(path)
-    return content, size
+    return nil
 end
 
 local function compile(path, content)
@@ -57,11 +52,14 @@ local function shallowPatchTable(old, new)
     end
 end
 
-function Reloader.new(registry, reporter, overlay)
+function Reloader.new(registry, reporter, overlay, options)
+    options = options or {}
+
     return setmetatable({
         registry = registry,
         reporter = reporter,
         overlay = overlay,
+        reloadMain = options.reloadMain,
     }, { __index = Reloader })
 end
 
@@ -75,6 +73,9 @@ end
 
 function Reloader:reloadPath(path, kind)
     if kind == "main" then
+        if self.reloadMain then
+            return self:reloadMainChunk(path)
+        end
         self:validateRestartOnly(path, "main.lua changed; restart required. relove will not hot reload boot code because it can duplicate state or reset callbacks.")
         return
     end
@@ -93,7 +94,7 @@ function Reloader:reloadPath(path, kind)
         return
     end
 
-    self:reloadModule(record)
+    return self:reloadModule(record)
 end
 
 function Reloader:validateRestartOnly(path, message)
@@ -121,6 +122,47 @@ function Reloader:validateRestartOnly(path, message)
     end
 end
 
+-- Opt-in (start{ reloadMain = true }). Re-runs main.lua so edited love.* callbacks
+-- take effect without a restart. It does NOT re-call love.load; live state kept in
+-- modules survives (they hot-reload separately). Any file-scope work in main.lua
+-- re-runs, so this is best for a thin main.lua that only wires callbacks.
+function Reloader:reloadMainChunk(path)
+    local content = readFile(path)
+    if not content then
+        self:report({ status = "error", file = path, message = "could not read file", usingLastGood = true })
+        return false
+    end
+
+    local loader, syntaxError = compile(path, content)
+    if syntaxError then
+        self:report({ status = "error", file = path, message = syntaxError, usingLastGood = true })
+        return false
+    end
+
+    local ok, err = xpcall(loader, debug.traceback)
+    if not ok then
+        -- Unlike a module reload, we can't roll back a half-run boot chunk: some
+        -- callbacks may already be re-bound. Report honestly that we are NOT on
+        -- clean last-good code.
+        self:report({
+            status = "error",
+            file = path,
+            message = (tostring(err):match("^[^\n]+") or tostring(err)) .. " (main.lua ran partway; state may be inconsistent)",
+            stack = tostring(err),
+            usingLastGood = false,
+        })
+        return false
+    end
+
+    self:report({
+        status = "ok",
+        file = path,
+        message = "reloaded main.lua (callbacks re-bound; boot code re-ran)",
+        usingLastGood = false,
+    })
+    return true
+end
+
 function Reloader:reloadModule(record)
     local path = record.path
     local name = record.name
@@ -142,6 +184,23 @@ function Reloader:reloadModule(record)
     end
 
     local oldExport = record.exported
+
+    -- A module can veto a reload it can't safely take right now (e.g. a suspended
+    -- coroutine or an in-flight critical section). __accept runs on the old export
+    -- before the new chunk executes, so a veto has no side effects. Return false to
+    -- veto; nil/true lets the reload proceed. A re-save re-attempts.
+    if type(oldExport) == "table" and type(oldExport.__accept) == "function" then
+        local called, accepted, reason = pcall(oldExport.__accept, oldExport)
+        if called and accepted == false then
+            local message = "reload vetoed by " .. name
+            if reason then
+                message = message .. ": " .. tostring(reason)
+            end
+            self:report({ status = "vetoed", file = path, message = message, usingLastGood = true })
+            return false, "vetoed"
+        end
+    end
+
     local oldPackageValue = package.loaded[name]
     package.loaded[name] = nil
 

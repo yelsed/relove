@@ -10,11 +10,15 @@ save Lua file -> running game reloads module -> errors are shown without killing
 
 The goal is not to turn your game into a framework project. `relove` sits beside a normal LÖVE game and keeps the game code reloadable while you work.
 
+📖 **Topic-by-topic docs live in [`docs/`](docs/index.md)** — a set of plain markdown pages ready for a static-site generator.
+
 ## Status
 
 Prototype / early development.
 
-Works best today on Linux-like systems because file change detection currently shells out to `cksum` and `cat` for reliable source-file reads while the game is running.
+Runs on Linux, macOS, and Windows. File change detection and source reads use
+`love.filesystem` and a pure-Lua hash, so the hot path needs no shell utilities.
+Directory creation is the one remaining OS call and is handled per platform.
 
 The core design is intentionally small and boring:
 
@@ -65,16 +69,17 @@ end
 
 ## Prerequisites
 
-Current `relove` is Linux/POSIX-first.
+`relove` runs on Linux, macOS, and Windows.
 
 You need:
 
 - LÖVE installed and runnable as `love`
 - a standalone `lua` executable on `PATH`
-- a POSIX shell for the `relove` wrapper
-- POSIX utilities used by the installer/runtime: `mkdir`, `cp`, `chmod`, `cksum`, and `cat`
+- a shell to run a wrapper: POSIX `sh` uses `relove`; Windows `cmd` uses `relove.bat`
 
-This means Windows is not supported yet without a portability pass. A Windows-ready version should replace the shell wrapper, installer copy commands, and file checksum/read backend with portable implementations.
+The installer copies runtime files in pure Lua (no `cp`/`cksum`/`cat`). The only
+shell command still used is `mkdir` (POSIX `mkdir -p`, Windows `mkdir`), because
+Lua cannot create a directory on its own. Run `relove doctor` to check your setup.
 
 ## Installation
 
@@ -151,6 +156,7 @@ From a game project where `relove` has been installed:
 ./relove run .
 ./relove status .
 ./relove logs .
+./relove doctor .
 ```
 
 From this package repository:
@@ -198,6 +204,17 @@ Prints the event history from:
 
 This is useful for agents, editor integrations, and terminal-based helpers.
 
+### `relove doctor`
+
+Checks a game's setup and prints a pass/fail report:
+
+- `love` runnable on `PATH`
+- runtime present (`dev/relove/init.lua`)
+- `main.lua` contains the relove block
+- `.relove/` is writable
+
+Useful right after `init`, and as a quick health check for agents.
+
 ## Runtime feedback files
 
 Inside a game project, `relove` writes:
@@ -216,6 +233,7 @@ Example:
 
 ```json
 {
+  "schemaVersion": 1,
   "status": "ok",
   "file": "src/settings.lua",
   "message": "reloaded src.settings",
@@ -259,11 +277,45 @@ relove: info
 relove: ok
 relove: error
 relove: restart_required
+relove: vetoed
 ```
+
+Below the current status, the overlay lists the last few reload events as history.
 
 Press `F8` to toggle the overlay.
 
 When reload fails, the overlay shows that the game is using last-good code.
+
+## Configuration
+
+Options can be passed inline to `start(...)`:
+
+```lua
+require("dev.relove").start({ interval = 0.1, overlayKey = "f9" })
+```
+
+Or placed in an optional `.relove.lua` file at the project root, which returns a
+table:
+
+```lua
+-- .relove.lua
+return {
+    interval = 0.1,          -- poll interval in seconds (default 0.15)
+    overlayKey = "f9",       -- overlay toggle key (default f8)
+    overlay = true,          -- set false to disable the overlay entirely
+    reloadMain = false,      -- opt-in main.lua re-run (see below); default false
+    ignore = {               -- paths/globs to never watch or reload
+        "vendor/",           -- trailing slash = directory prefix
+        "*.min.lua",         -- * and ? glob the full path or basename
+    },
+}
+```
+
+Inline `start(options)` wins over `.relove.lua` for any key set in both. A broken
+`.relove.lua` is ignored (with a printed warning) rather than blocking startup.
+
+`ignore` applies to every watched file, so an over-broad glob like `*.lua` also
+silences `main.lua`/`conf.lua` restart detection — keep ignore globs specific.
 
 ## Recommended module style
 
@@ -299,6 +351,82 @@ end
 
 Function-returning modules can be reloaded, but old local references may still point at the previous function.
 
+## Per-module reload hooks
+
+A table-returning module can define optional hooks that `relove` calls during a
+reload. All are optional; a module that defines none reloads normally.
+
+```lua
+local Scene = {}
+
+-- Called just before the reload, on the OLD module. Return false to veto a
+-- reload the module can't safely take right now (e.g. a suspended coroutine or
+-- an in-flight transaction). The new chunk is not executed on a veto, so it has
+-- no side effects. A re-save re-attempts. An optional second return is shown as
+-- the reason.
+function Scene.__accept(old)
+    if old.transition and old.transition:isRunning() then
+        return false, "mid-transition"
+    end
+end
+
+-- Called on the OLD module right before its table is patched, so it can release
+-- resources it owns (timers, threads, canvases).
+function Scene.__dispose(old)
+    if old.canvas then old.canvas:release() end
+end
+
+-- Called on the patched module after the reload, with the freshly loaded table,
+-- so it can migrate or re-derive state.
+function Scene.__hotreload(current, incoming)
+    current.version = (current.version or 0) + 1
+end
+
+return Scene
+```
+
+When `__accept` vetoes, `relove` keeps the running code and reports status
+`vetoed` (the file changed on disk but was not applied).
+
+## Asset hot reload (opt-in)
+
+`relove` can hot-reload images, shaders, and audio, but only for assets you load
+through its accessors instead of the raw LÖVE loaders:
+
+```lua
+local relove = require("dev.relove")
+
+local hero   = relove.image("assets/hero.png")
+local blur   = relove.shader("assets/blur.glsl")
+local hit    = relove.audio("assets/hit.wav")          -- "static" by default
+local music  = relove.audio("assets/song.ogg", "stream")
+```
+
+`relove` interns each asset by path, watches the file, and reloads on change.
+Assets loaded with the raw `love.graphics.newImage` / `love.audio.newSource` are
+not tracked, and a game that never calls these accessors is unaffected.
+
+**Images reload in place.** When the edited image keeps the same dimensions,
+`relove` uses `Image:replacePixels`, so a cached handle updates without any
+re-fetch:
+
+```lua
+function love.draw()
+    love.graphics.draw(hero, 100, 100)   -- edits to hero.png show up live
+end
+```
+
+**Shaders and audio are swapped.** They are userdata with no in-place update, so
+`relove` replaces the interned object. To see the new one, re-fetch it at the
+point of use:
+
+```lua
+love.graphics.setShader(relove.shader("assets/blur.glsl"))
+```
+
+If an image changes dimensions, it is swapped too (and needs the same re-fetch).
+A failed reload keeps the last-good asset and reports an `error`.
+
 ## `main.lua` and `conf.lua`
 
 `relove` does not hot-reload `main.lua` as normal gameplay code.
@@ -319,6 +447,22 @@ This is deliberate. Re-running `main.lua` can:
 `conf.lua` also requires restart because LÖVE reads it before the game starts.
 
 Put reloadable gameplay code in modules under `src/` or a similar folder.
+
+### Opt-in `main.lua` reload
+
+If your `main.lua` is thin — it only wires `love.*` callbacks to modules and
+holds no state of its own — you can let `relove` re-run it on change instead of
+asking for a restart:
+
+```lua
+require("dev.relove").start({ reloadMain = true })
+```
+
+With `reloadMain`, a `main.lua` change re-runs the file so edited callbacks take
+effect, but `love.load` is **not** called again. Live state lives in your modules
+(which hot-reload separately) and survives. The catch: any file-scope code in
+`main.lua` runs again, so this is only safe for a thin `main.lua`. It is off by
+default. `conf.lua` is always restart-only.
 
 ## Example project shape
 
@@ -357,46 +501,50 @@ end
 
 The actual reloadable logic lives in `src/` modules.
 
-## Optional VS Code adapter
+## Optional editor adapters
 
-The repository includes a minimal VS Code adapter:
-
-```text
-editor/vscode-relove/
-  package.json
-  extension.js
-```
-
-It watches:
+The repository includes minimal adapters for VS Code and Neovim:
 
 ```text
-.relove/status.json
+editor/vscode-relove/    # package.json + extension.js
+editor/nvim-relove/      # lua/relove.lua + README
+editor/PROTOCOL.md       # the editor-agnostic status.json contract
 ```
 
-and turns `relove` errors into editor diagnostics.
+Both watch `.relove/status.json` and turn `relove` errors into editor
+diagnostics. The VS Code adapter also parses the error `stack` into clickable
+related-information frames.
 
-The adapter is optional. Hot reload works without it.
+The adapters are optional; hot reload works without them. To write your own
+(Emacs, a TUI, an agent), follow the versioned contract in
+[`editor/PROTOCOL.md`](editor/PROTOCOL.md).
 
 ## Package layout
 
 ```text
 relove
-├── relove                         # shell wrapper for the CLI
+├── relove                         # POSIX shell wrapper for the CLI
+├── relove.bat                     # Windows wrapper for the CLI
 ├── tools/
 │   └── relove.lua                 # CLI implementation
 ├── dev/
 │   ├── relove.lua                 # runtime entrypoint copied into games
 │   └── relove/
-│       ├── init.lua               # starts runtime and custom run loop
+│       ├── init.lua               # starts runtime, loads config, custom run loop
 │       ├── module_registry.lua    # tracks required modules
-│       ├── watcher.lua            # detects source changes
-│       ├── reloader.lua           # reloads modules safely
+│       ├── watcher.lua            # detects source changes, applies ignore globs
+│       ├── reloader.lua           # reloads modules safely, runs hooks
+│       ├── assets.lua             # opt-in image/shader/audio hot reload
 │       ├── reporter.lua           # writes status/log files
-│       └── overlay.lua            # draws in-game feedback
+│       └── overlay.lua            # draws in-game feedback + history
 └── editor/
-    └── vscode-relove/
-        ├── package.json
-        └── extension.js
+    ├── PROTOCOL.md                # editor-agnostic status.json contract
+    ├── vscode-relove/
+    │   ├── package.json
+    │   └── extension.js
+    └── nvim-relove/
+        ├── README.md
+        └── lua/relove.lua
 ```
 
 ## How it works
@@ -455,28 +603,20 @@ or guard it behind your own development flag.
 
 ## Platform notes
 
-Current `relove` is Linux/POSIX-first.
+`relove` runs on Linux, macOS, and Windows.
 
 The CLI/install path uses:
 
 ```text
-sh
-lua
-mkdir
-cp
-chmod
+lua        (runs the CLI)
+mkdir      (POSIX `mkdir -p`, Windows `mkdir`; the one unavoidable shell call)
 ```
 
-The watcher/reloader backend uses:
+Runtime files are copied in pure Lua; the wrapper is `relove` (POSIX) or
+`relove.bat` (Windows).
 
-```text
-cksum
-cat
-```
-
-That makes the current implementation Linux-friendly and likely macOS-friendly if those commands are available.
-
-Windows support should replace the shell wrapper, install commands, file-reading backend, and checksum backend with portable implementations.
+The watcher/reloader backend is shell-free: it reads source files with
+`love.filesystem.read` and hashes them with a pure-Lua rolling checksum.
 
 ## Troubleshooting
 
@@ -529,14 +669,13 @@ Restart the game. LÖVE reads `conf.lua` before the game starts.
 
 Before publishing this repository for general use:
 
-- choose and add a license
-- decide whether Windows support is required for v1
-- add automated tests for the watcher/reloader
+- license: done — MIT (see LICENSE)
+- verify the Windows path end-to-end on a real Windows machine (logic is portable; not yet run there)
+- automated tests: done — run `test/run.sh` (see `test/README.md`)
 - add installation examples for common project layouts
 - decide whether the VS Code adapter should be packaged as a real extension
 
 ## License
 
-No license has been chosen yet.
-
-If this should be usable by everyone, add a permissive license before publishing. MIT is the obvious default for this kind of tool, but the project owner should make that decision.
+MIT — see [LICENSE](LICENSE). Free to use, modify, and distribute; keep the
+copyright notice, no warranty.

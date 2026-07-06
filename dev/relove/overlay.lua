@@ -6,11 +6,14 @@ Overlay.status = {
     status = "info",
     message = "relove watching",
 }
+Overlay.history = {}
+Overlay.historyLimit = 5
 
 local palette = {
     ok = { 0.15, 0.75, 0.35, 0.92 },
     info = { 0.25, 0.55, 1.0, 0.92 },
     restart_required = { 1.0, 0.72, 0.22, 0.94 },
+    vetoed = { 0.62, 0.45, 0.95, 0.94 },
     error = { 1.0, 0.22, 0.22, 0.96 },
     panel = { 0.04, 0.05, 0.08, 0.82 },
     text = { 0.95, 0.97, 1.0, 1.0 },
@@ -29,6 +32,29 @@ end
 
 function Overlay.setStatus(status)
     Overlay.status = status or Overlay.status
+
+    if status then
+        Overlay.pushHistory(status)
+    end
+end
+
+function Overlay.pushHistory(status)
+    local entry = {
+        status = status.status or "info",
+        file = status.file,
+        message = status.message,
+    }
+
+    -- Skip consecutive duplicates (e.g. the two boot infos) so history stays useful.
+    local last = Overlay.history[#Overlay.history]
+    if last and last.status == entry.status and last.file == entry.file and last.message == entry.message then
+        return
+    end
+
+    Overlay.history[#Overlay.history + 1] = entry
+    while #Overlay.history > Overlay.historyLimit do
+        table.remove(Overlay.history, 1)
+    end
 end
 
 function Overlay.keypressed(key)
@@ -82,6 +108,40 @@ function Overlay.draw()
     if statusName == "error" and status.stack then
         local stackLine = tostring(status.stack):match("[^\n]+") or tostring(status.stack)
         line(stackLine, x + 16, y + 78, width - 28, palette.muted)
+    end
+
+    -- Recent history below the main card (newest first, excluding the current event).
+    local recentCount = #Overlay.history - 1
+    if recentCount > 0 then
+        local rowHeight = 18
+        local historyY = y + height + 8
+        love.graphics.setColor(palette.panel)
+        love.graphics.rectangle("fill", x, historyY, width, recentCount * rowHeight + 12, 8, 8)
+
+        local row = 0
+        for index = #Overlay.history - 1, 1, -1 do
+            local entry = Overlay.history[index]
+            local rowY = historyY + 6 + row * rowHeight
+
+            love.graphics.setColor(palette[entry.status] or palette.info)
+            love.graphics.rectangle("fill", x + 10, rowY + 5, 6, 6, 2, 2)
+
+            local text = entry.status
+            if entry.file then
+                text = text .. " · " .. entry.file
+            end
+            if entry.message then
+                text = text .. " — " .. entry.message
+            end
+
+            -- Keep each event on one row; a long message would wrap and overlap.
+            if #text > 88 then
+                text = text:sub(1, 85) .. "..."
+            end
+
+            line(text, x + 24, rowY, width - 36, palette.muted)
+            row = row + 1
+        end
     end
 
     love.graphics.pop()

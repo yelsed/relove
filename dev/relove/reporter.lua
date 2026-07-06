@@ -19,8 +19,15 @@ Reporter.statusPath = stateDir .. "/status.json"
 Reporter.errorLogPath = stateDir .. "/errors.log"
 Reporter.eventLogPath = stateDir .. "/events.log"
 
-local function shellQuote(value)
-    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+local isWindows = package.config:sub(1, 1) == "\\"
+
+local function osQuote(value)
+    value = tostring(value)
+    if isWindows then
+        return '"' .. value:gsub('"', '') .. '"'
+    end
+
+    return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
 local function escapeJsonString(value)
@@ -61,14 +68,25 @@ local function encodeJson(value)
 end
 
 local function ensureProjectStateDir()
-    -- os.execute returns the exit status (0 or true on success), it never raises,
-    -- so inspect the return value rather than wrapping it in pcall.
-    local ok = os.execute("mkdir -p " .. shellQuote(Reporter.statePath))
-    if ok == true or ok == 0 then
+    -- The CLI's `init` already created .relove; this is a per-process safety net,
+    -- memoized so we don't fork a mkdir on every status write. Pure Lua can't
+    -- create a directory, so this is the one runtime shell-out (OS-aware).
+    if Reporter._stateDirReady then
         return
     end
 
-    if love and love.filesystem then
+    Reporter._stateDirReady = true
+
+    local ok
+    if isWindows then
+        ok = os.execute("mkdir " .. osQuote((Reporter.statePath:gsub("/", "\\"))) .. " >NUL 2>&1")
+    else
+        ok = os.execute("mkdir -p " .. osQuote(Reporter.statePath))
+    end
+
+    -- Only touch the save dir if the shell mkdir was unavailable/failed; on POSIX
+    -- mkdir -p is idempotent (ok every run) so the save dir stays untouched.
+    if not (ok == true or ok == 0) and love and love.filesystem then
         love.filesystem.createDirectory(".relove")
     end
 end
@@ -111,6 +129,8 @@ function Reporter.write(payload)
     ensureProjectStateDir()
 
     payload.updatedAt = payload.updatedAt or now()
+    -- Stamp the contract version so editor/agent adapters can evolve safely.
+    payload.schemaVersion = payload.schemaVersion or 1
 
     local encoded = encodeJson(payload)
     writeFile(Reporter.statusPath, encoded .. "\n")

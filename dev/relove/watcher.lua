@@ -6,10 +6,42 @@ function Watcher.new(registry, reloader, options)
     return setmetatable({
         registry = registry,
         reloader = reloader,
-        interval = options.interval or 0.15,
+        -- Guard types here too: a bad config value must fall back, never crash.
+        interval = type(options.interval) == "number" and options.interval or 0.15,
+        ignore = type(options.ignore) == "table" and options.ignore or nil,
         elapsed = 0,
         files = {},
     }, { __index = Watcher })
+end
+
+-- A trailing-slash glob (vendor/) is a directory prefix; otherwise `*`/`?` match
+-- against the full path or the basename (so *.min.lua catches nested files too).
+local function matchesGlob(path, glob)
+    if glob:sub(-1) == "/" then
+        return path:sub(1, #glob) == glob
+    end
+
+    local pattern = "^" .. glob:gsub("[%.%-%+%(%)%[%]%^%$%%]", "%%%0"):gsub("%*", ".*"):gsub("%?", ".") .. "$"
+    if path:match(pattern) then
+        return true
+    end
+
+    local base = path:match("[^/]+$")
+    return base ~= nil and base:match(pattern) ~= nil
+end
+
+function Watcher:isIgnored(path)
+    if not self.ignore then
+        return false
+    end
+
+    for _, glob in ipairs(self.ignore) do
+        if matchesGlob(path, glob) then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function sourcePath(path)
@@ -18,10 +50,6 @@ local function sourcePath(path)
     end
 
     return path
-end
-
-local function shellQuote(value)
-    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
 local function getInfo(path)
@@ -45,23 +73,20 @@ local function getInfo(path)
 end
 
 local function checksum(path)
-    local handle = io.popen("cksum " .. shellQuote(sourcePath(path)))
-    if handle then
-        local line = handle:read("*l")
-        handle:close()
-        if line and line ~= "" then
-            return line
-        end
-    end
-
-    local file = io.open(sourcePath(path), "r")
+    -- Pure-Lua rolling hash: portable (no `cksum`), and only runs after the
+    -- getInfo modtime/size gate, so it isn't paid for untouched files.
     local content
 
-    if file then
-        content = file:read("*a")
-        file:close()
-    else
+    if love and love.filesystem and love.filesystem.read then
         content = love.filesystem.read(path)
+    end
+
+    if not content then
+        local file = io.open(sourcePath(path), "r")
+        if file then
+            content = file:read("*a")
+            file:close()
+        end
     end
 
     if not content then
@@ -92,7 +117,7 @@ function Watcher:scan()
 
     for path, entry in pairs(watched) do
         local info = getInfo(path)
-        if info then
+        if info and not self:isIgnored(path) then
             local previous = self.files[path]
 
             if not previous then
@@ -103,8 +128,15 @@ function Watcher:scan()
             elseif previous.modtime ~= info.modtime or previous.size ~= info.size then
                 local signature = checksum(path)
                 if previous.signature ~= signature then
-                    self:remember(path, entry, info, signature)
-                    self.reloader:reloadPath(path, entry.kind)
+                    local _, reason = self.reloader:reloadPath(path, entry.kind)
+                    if reason == "vetoed" then
+                        -- Keep the new modtime/size so we don't retry every poll, but
+                        -- keep the OLD signature so the next save (even identical bytes)
+                        -- re-attempts the vetoed reload. Honors "a re-save re-attempts".
+                        self:remember(path, entry, info, previous.signature)
+                    else
+                        self:remember(path, entry, info, signature)
+                    end
                 else
                     -- Metadata moved but content is identical; refresh stored stats.
                     self:remember(path, entry, info, signature)
