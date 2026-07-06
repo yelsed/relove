@@ -1,5 +1,13 @@
 # relove
 
+```text
+              ..
+ _ __ ___| | ___ __   _____
+| '__/ _ \ |/ _ \\ \ / / _ \
+| |  |  __/ | (_) |\ V /|  __/
+|_|   \___|_|\___/  \_/  \___|
+```
+
 `relove` is a small, drop-in hot-reload helper for [LÖVE](https://love2d.org/) games.
 
 ```text
