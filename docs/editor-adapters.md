@@ -2,8 +2,9 @@
 
 [← Back to index](./index.md)
 
-`relove` writes machine-readable state to `<project>/.relove/` so any editor or agent
-can react to reloads without screen-scraping. This is a stable, versioned contract;
+`relove` writes machine-readable state to `<project>/.relove/` so any editor or
+external tool can react to reloads without screen-scraping. This is a stable,
+versioned contract;
 the VS Code and Neovim adapters shipped in the repo are just two consumers.
 
 ## The `.relove/` directory

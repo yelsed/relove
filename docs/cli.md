@@ -32,7 +32,7 @@ block is removed; surrounding code (including blank lines you wrote) is preserve
 ## `relove status`
 
 Prints the current `.relove/status.json` — the latest reload event as one JSON
-object. Useful for agents and editor integrations.
+object. Useful for editor integrations and other tooling.
 
 ## `relove logs`
 
@@ -47,7 +47,7 @@ Checks a game's setup and prints a pass/fail report:
 - `main.lua` contains the relove block
 - `.relove/` is writable
 
-Handy right after `init`, and as a quick health check for agents and CI.
+Handy right after `init`, and as a quick health check for CI and other tooling.
 
 ## `relove run`
 

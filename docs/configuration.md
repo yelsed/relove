@@ -32,9 +32,11 @@ return {
 ```
 
 Inline `start(options)` wins over `.relove.lua` for any key set in both. A broken
-`.relove.lua` (syntax error, or a field of the wrong type) is ignored with a printed
-warning rather than blocking startup — a bad `interval` falls back to the default
-instead of crashing the game.
+`.relove.lua` (syntax error) is ignored with a printed warning rather than blocking
+startup. Type-checking is limited to two keys: a wrong-typed `interval` or `ignore`
+is warned about and falls back to the default. The rest (`overlayKey`, `overlay`,
+`reloadMain`) are passed through as-is, so a wrong type there is not caught — e.g. a
+numeric `overlayKey` is truthy and the toggle simply never matches.
 
 ## Options
 
