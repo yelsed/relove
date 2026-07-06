@@ -2,17 +2,18 @@
 
 [← Back to index](./index.md)
 
-The CLI runs under plain `lua` (no LÖVE needed). Invoke it through the wrapper
-(`./relove` on POSIX, `relove.bat` on Windows) or directly with
-`lua tools/relove.lua <command> [project]`. `[project]` defaults to `.`.
+The CLI runs under `lua` or `luajit` (no LÖVE needed). Once
+[installed](./installation.md) the command is `relove`. From a source checkout use
+the `./relove` wrapper (`relove.bat` on Windows), or run
+`lua tools/relove.lua <command> [project]` directly. `[project]` defaults to `.`.
 
 ```sh
-./relove init   [project]
-./relove remove [project]
-./relove status [project]
-./relove logs   [project]
-./relove doctor [project]
-./relove run    [project]
+relove init   [project]
+relove remove [project]
+relove status [project]
+relove logs   [project]
+relove doctor [project]
+relove run    [project]
 ```
 
 ## `relove init`

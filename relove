@@ -1,4 +1,19 @@
 #!/usr/bin/env sh
 set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-exec lua "$SCRIPT_DIR/tools/relove.lua" "$@"
+
+# LÖVE ships luajit, so a game machine often has luajit but no standalone lua.
+# Prefer lua, fall back to luajit. RELOVE_LUA overrides both.
+LUA="${RELOVE_LUA:-}"
+if [ -z "$LUA" ]; then
+    if command -v lua >/dev/null 2>&1; then
+        LUA=lua
+    elif command -v luajit >/dev/null 2>&1; then
+        LUA=luajit
+    else
+        echo "relove: need lua or luajit on PATH" >&2
+        exit 1
+    fi
+fi
+
+exec "$LUA" "$SCRIPT_DIR/tools/relove.lua" "$@"

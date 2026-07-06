@@ -112,6 +112,14 @@ local function makeExecutable(path)
 end
 
 local function scriptRoot()
+    -- An installed CLI (Homebrew, curl script) lives outside the repo, so its
+    -- wrapper points RELOVE_RUNTIME at the bundled runtime directory. When set it
+    -- wins over the arg[0]-relative guess below, which only works from a checkout.
+    local override = os.getenv("RELOVE_RUNTIME")
+    if override and override ~= "" then
+        return (override:gsub("\\", "/"))
+    end
+
     -- relove.bat passes a backslash arg[0] (from %~dp0); normalize to forward
     -- slashes so the pattern matches on Windows too. join/io.open accept "/" on
     -- Windows, and makeDir converts back to "\" for the mkdir shell call.

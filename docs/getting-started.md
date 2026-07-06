@@ -5,17 +5,17 @@
 ## Prerequisites
 
 - LÖVE installed and runnable as `love`
-- a standalone `lua` (or `luajit`) executable on `PATH`
-- a shell to run the wrapper: POSIX `sh` uses `relove`, Windows `cmd` uses `relove.bat`
+- a `lua` (or `luajit`) executable on `PATH` — LÖVE ships `luajit`
+- the `relove` CLI installed (see [Installation](./installation.md))
 
 Run [`relove doctor`](./cli.md#relove-doctor) any time to check your setup.
 
 ## Install into a game
 
-From the `relove` repository, point `init` at your game project:
+Point `init` at your game project:
 
 ```sh
-./relove init /path/to/game
+relove init /path/to/game
 ```
 
 `init`:
@@ -39,7 +39,7 @@ it again and the block is not duplicated.
 ## Run
 
 ```sh
-./relove run /path/to/game
+relove run /path/to/game
 ```
 
 This launches `love` with the game directory as its working directory. You can also
@@ -52,7 +52,7 @@ Press `F8` to toggle the in-game overlay (configurable — see
 ## Remove
 
 ```sh
-./relove remove /path/to/game
+relove remove /path/to/game
 ```
 
 Strips the block from `main.lua`, leaving your original code intact.

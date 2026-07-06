@@ -18,7 +18,8 @@ against the same reference. That single trick is the whole engine; everything el
 
 | Page | What it covers |
 |------|----------------|
-| [Getting started](./getting-started.md) | Install, patch a game, run it, module style |
+| [Installation](./installation.md) | Homebrew, install script, from source |
+| [Getting started](./getting-started.md) | Patch a game, run it, module style |
 | [Configuration](./configuration.md) | `.relove.lua`, `start()` options, ignore globs |
 | [Reload hooks](./reload-hooks.md) | `__accept` veto, `__dispose`, `__hotreload` |
 | [Asset hot reload](./asset-reload.md) | Opt-in image / shader / audio reload |

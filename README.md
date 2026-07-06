@@ -14,19 +14,25 @@ overview; every topic below links into it.
 
 ## Quick start
 
-From a copy of this repository:
+Install the CLI (needs `lua` or `luajit` on `PATH` — LÖVE ships `luajit`):
 
 ```sh
-git clone <your-relove-repo-url> relove
-cd relove
-./relove init /path/to/your-love-game   # patch a game
-./relove run  /path/to/your-love-game   # launch it with love
+brew install yelsed/relove/relove
+# or, without Homebrew:
+curl -fsSL https://raw.githubusercontent.com/yelsed/relove/master/install.sh | sh
+```
+
+Then add relove to a game and run it:
+
+```sh
+relove init /path/to/your-love-game   # patch a game
+relove run  /path/to/your-love-game   # launch it with love
 ```
 
 Edit any table-returning module under `src/` while the game runs — the change
 applies in place. Press `F8` to toggle the in-game status overlay.
 
-New to it? Start with [Getting started](docs/getting-started.md).
+New to it? See [Installation](docs/installation.md) and [Getting started](docs/getting-started.md).
 
 ## Features
 
