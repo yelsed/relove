@@ -216,6 +216,10 @@ function Relove.start(options)
     })
     Relove.assets = Assets.new(Reporter, Overlay, {
         interval = options.interval or options.pollInterval or 0.15,
+        -- Reuse the watcher's ignore matching so `ignore` globs skip asset reloads too.
+        isIgnored = function(path)
+            return Relove.watcher:isIgnored(path)
+        end,
     })
 
     installRunLoop(Relove)

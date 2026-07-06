@@ -243,8 +243,14 @@ local function printLogs(targetDir)
 end
 
 local function run(targetDir)
-    -- love accepts the game directory as an argument, so no `cd` and no shell chain.
-    os.execute("love " .. osQuote(targetDir))
+    -- cd into the game dir so the process CWD matches it (relative raw io/os paths
+    -- resolve against the game, not the launch dir). `run` is a dev convenience that
+    -- already shells out, so the cd is fine here (unlike the hot/install path).
+    if isWindows then
+        os.execute("cd /d " .. osQuote((targetDir:gsub("/", "\\"))) .. " && love .")
+    else
+        os.execute("cd " .. osQuote(targetDir) .. " && love .")
+    end
 end
 
 local function commandSucceeds(probe)

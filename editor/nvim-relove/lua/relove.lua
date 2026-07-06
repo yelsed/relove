@@ -73,6 +73,7 @@ end
 function M.stop()
   if M._watcher then
     pcall(function() M._watcher:stop() end)
+    pcall(function() M._watcher:close() end)
     M._watcher = nil
   end
   if M._timer then

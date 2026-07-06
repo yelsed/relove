@@ -40,7 +40,10 @@ function Assets.new(reporter, overlay, options)
     return setmetatable({
         reporter = reporter,
         overlay = overlay,
-        interval = options.interval or 0.15,
+        -- Guard the type: a bad config value must fall back, never crash the
+        -- un-pcall'd update loop (self.elapsed < self.interval). Mirrors Watcher.new.
+        interval = type(options.interval) == "number" and options.interval or 0.15,
+        isIgnored = options.isIgnored,
         elapsed = 0,
         entries = {},
     }, { __index = Assets })
@@ -131,7 +134,10 @@ function Assets:reload(entry)
                 self:report({ status = "error", file = path, message = tostring(newImage), usingLastGood = true })
                 return
             end
-            releaseOld(entry)
+            -- Don't force-release the old Image: the game may still hold a cached
+            -- handle. Drop the reference and let GC reclaim it; the stale handle
+            -- keeps drawing old pixels until the game re-fetches (matches the
+            -- "images update in place" promise for the common same-size case).
             entry.object = newImage
         end
 
@@ -158,9 +164,11 @@ end
 
 function Assets:scan()
     for _, entry in pairs(self.entries) do
-        local info = getInfo(entry.path)
-        if info and (info.modtime ~= entry.modtime or info.size ~= entry.size) then
-            self:reload(entry)
+        if not (self.isIgnored and self.isIgnored(entry.path)) then
+            local info = getInfo(entry.path)
+            if info and (info.modtime ~= entry.modtime or info.size ~= entry.size) then
+                self:reload(entry)
+            end
         end
     end
 end
