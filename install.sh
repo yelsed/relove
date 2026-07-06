@@ -60,7 +60,7 @@ cp -R "$SRC/dev" "$SRC/tools" "$PREFIX/"
 cat > "$BIN/relove" <<SH
 #!/bin/sh
 export RELOVE_RUNTIME="$PREFIX"
-exec $LUA "$PREFIX/tools/relove.lua" "\$@"
+exec "$LUA" "$PREFIX/tools/relove.lua" "\$@"
 SH
 chmod +x "$BIN/relove"
 
