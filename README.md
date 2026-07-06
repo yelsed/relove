@@ -667,7 +667,7 @@ Restart the game. LÖVE reads `conf.lua` before the game starts.
 
 Before publishing this repository for general use:
 
-- choose and add a license
+- license: done — MIT (see LICENSE)
 - verify the Windows path end-to-end on a real Windows machine (logic is portable; not yet run there)
 - automated tests: done — run `test/run.sh` (see `test/README.md`)
 - add installation examples for common project layouts
@@ -675,6 +675,5 @@ Before publishing this repository for general use:
 
 ## License
 
-No license has been chosen yet.
-
-If this should be usable by everyone, add a permissive license before publishing. MIT is the obvious default for this kind of tool, but the project owner should make that decision.
+MIT — see [LICENSE](LICENSE). Free to use, modify, and distribute; keep the
+copyright notice, no warranty.
