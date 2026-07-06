@@ -17,9 +17,15 @@ overview; every topic below links into it.
 Install the CLI (needs `lua` or `luajit` on `PATH` — LÖVE ships `luajit`):
 
 ```sh
+# macOS / Linux
 brew install yelsed/relove/relove
-# or, without Homebrew:
+# or, without Homebrew (also WSL / Git Bash):
 curl -fsSL https://raw.githubusercontent.com/yelsed/relove/master/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/yelsed/relove/master/install.ps1 | iex
 ```
 
 Then add relove to a game and run it:
