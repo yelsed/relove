@@ -16,6 +16,14 @@ VERSION="${RELOVE_VERSION:-master}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+cat <<'BANNER'
+              ..
+ _ __ ___| | ___ __   _____
+| '__/ _ \ |/ _ \\ \ / / _ \
+| |  |  __/ | (_) |\ V /|  __/
+|_|   \___|_|\___/  \_/  \___|
+BANNER
+
 # LÖVE ships luajit, so a game machine often has luajit but no standalone lua.
 if have lua; then LUA=lua
 elif have luajit; then LUA=luajit

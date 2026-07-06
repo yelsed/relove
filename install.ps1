@@ -9,6 +9,14 @@
 
 $ErrorActionPreference = 'Stop'
 
+Write-Host @'
+              ..
+ _ __ ___| | ___ __   _____
+| '__/ _ \ |/ _ \\ \ / / _ \
+| |  |  __/ | (_) |\ V /|  __/
+|_|   \___|_|\___/  \_/  \___|
+'@
+
 $repo    = 'yelsed/relove'
 $version = if ($env:RELOVE_VERSION) { $env:RELOVE_VERSION } else { 'master' }
 $prefix  = if ($env:RELOVE_PREFIX)  { $env:RELOVE_PREFIX }  else { Join-Path $env:LOCALAPPDATA 'relove' }

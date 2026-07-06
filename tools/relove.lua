@@ -17,6 +17,20 @@ local block = table.concat({
     '',
 }, "\n")
 
+-- Wordmark with the LÖVE umlaut over the o. Printed on human-facing commands
+-- (usage, init) but never on status/logs/doctor, whose output is parsed.
+local banner = [[
+              ..
+ _ __ ___| | ___ __   _____
+| '__/ _ \ |/ _ \\ \ / / _ \
+| |  |  __/ | (_) |\ V /|  __/
+|_|   \___|_|\___/  \_/  \___|
+]]
+
+local function printBanner()
+    io.write(banner)
+end
+
 -- The runtime is a fixed, known set of files, so init copies from this manifest
 -- instead of shelling out to `cp -R` (which needs a POSIX shell and dir listing).
 local runtimeModules = {
@@ -308,6 +322,7 @@ local function doctor(targetDir)
 end
 
 local function usage()
+    printBanner()
     print("relove - drop-in LÖVE hot reload")
     print("")
     print("Usage:")
@@ -320,6 +335,7 @@ local function usage()
 end
 
 if command == "init" then
+    printBanner()
     ensureRuntime(target)
     patchMain(target)
 elseif command == "remove" then
