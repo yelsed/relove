@@ -1,0 +1,59 @@
+# CLI reference
+
+[← Back to index](./index.md)
+
+The CLI runs under plain `lua` (no LÖVE needed). Invoke it through the wrapper
+(`./relove` on POSIX, `relove.bat` on Windows) or directly with
+`lua tools/relove.lua <command> [project]`. `[project]` defaults to `.`.
+
+```sh
+./relove init   [project]
+./relove remove [project]
+./relove status [project]
+./relove logs   [project]
+./relove doctor [project]
+./relove run    [project]
+```
+
+## `relove init`
+
+Copies the runtime into `<project>/dev/relove/`, copies the CLI and wrappers, backs
+up `main.lua` to `main.lua.relove-backup`, and prepends the hot-reload block to
+`main.lua`. Idempotent — the block is never duplicated.
+
+Runtime files are copied in pure Lua from a fixed manifest (no `cp`), so `init` works
+the same on every platform.
+
+## `relove remove`
+
+Strips the hot-reload block from `main.lua`, restoring your original code. Only the
+block is removed; surrounding code (including blank lines you wrote) is preserved.
+
+## `relove status`
+
+Prints the current `.relove/status.json` — the latest reload event as one JSON
+object. Useful for agents and editor integrations.
+
+## `relove logs`
+
+Prints the append-only `.relove/events.log` (JSON lines) — the full event history.
+
+## `relove doctor`
+
+Checks a game's setup and prints a pass/fail report:
+
+- `love` runnable on `PATH`
+- runtime present (`dev/relove/init.lua`)
+- `main.lua` contains the relove block
+- `.relove/` is writable
+
+Handy right after `init`, and as a quick health check for agents and CI.
+
+## `relove run`
+
+Launches the game with `love`, from the project directory (so the process working
+directory matches the game). Equivalent to running `love <project>` yourself, plus
+the correct working directory for games that use relative file paths.
+
+See [Runtime feedback files](./editor-adapters.md#the-relove-directory) for what the
+runtime writes into `.relove/`.

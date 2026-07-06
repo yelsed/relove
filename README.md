@@ -10,6 +10,8 @@ save Lua file -> running game reloads module -> errors are shown without killing
 
 The goal is not to turn your game into a framework project. `relove` sits beside a normal LÖVE game and keeps the game code reloadable while you work.
 
+📖 **Topic-by-topic docs live in [`docs/`](docs/index.md)** — a set of plain markdown pages ready for a static-site generator.
+
 ## Status
 
 Prototype / early development.
