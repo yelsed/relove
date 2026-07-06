@@ -48,7 +48,14 @@ local runtimeModules = {
 local function osQuote(value)
     value = tostring(value)
     if isWindows then
-        return '"' .. value:gsub('"', '') .. '"'
+        -- cmd.exe can't represent an embedded " inside "...", and a real Windows
+        -- path can't contain one either (it's an illegal filename character). So
+        -- refuse rather than silently strip it and act on a different path.
+        if value:find('"', 1, true) then
+            error("relove: path contains an illegal '\"' character: " .. value)
+        end
+
+        return '"' .. value .. '"'
     end
 
     return "'" .. value:gsub("'", "'\\''") .. "'"
