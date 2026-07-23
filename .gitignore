@@ -21,3 +21,6 @@ dist/
 *.tmp
 *.swp
 *.swo
+
+# OMC agent runtime state
+.omc/
