@@ -3,15 +3,28 @@
 The Homebrew formula and the install script both pull a tagged tarball from
 GitHub. Cutting a release is three steps.
 
-## 1. Tag and push a release
+## 1. Create a GitHub release from the automatic tag
+
+Every pull request merged into `master` is tagged automatically at its exact
+merge commit. The merge workflow finds the latest stable tag matching
+`vMAJOR.MINOR.PATCH` and increments only `PATCH`. If the repository has no stable
+semantic version tag, the first tag is `v0.0.1`. Prerelease and unrelated tags
+do not affect the next version, and tagging jobs are serialized to prevent
+concurrent merges from receiving the same version. Closing a pull request
+without merging it, or merging into a branch other than `master`, does not
+create a tag.
+
+After the merge workflow finishes, note the tag it created. Creating the GitHub
+release remains a deliberate manual step: in GitHub, create a release and select
+that existing tag, or run:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+gh release create v0.1.0 --verify-tag --generate-notes
 ```
 
-Then create a GitHub release for the tag (or `gh release create v0.1.0 --generate-notes`).
-GitHub serves the source tarball at:
+Replace `v0.1.0` with the automatically created tag. `--verify-tag` prevents the
+command from creating a different tag if the expected tag is unavailable.
+GitHub serves the source tarball for the example tag at:
 
 ```
 https://github.com/yelsed/relove/archive/refs/tags/v0.1.0.tar.gz
@@ -33,7 +46,7 @@ version; existing users get it with `brew upgrade relove`.
 ### First-time tap setup
 
 Create an empty public repo named exactly `homebrew-relove` under the `yelsed`
-org, add `Formula/relove.rb` (the copy from step 2). No other files are required.
+account, add `Formula/relove.rb` (the copy from step 2). No other files are required.
 
 ## 3. Install script
 

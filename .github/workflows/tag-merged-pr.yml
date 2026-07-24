@@ -1,0 +1,112 @@
+name: Tag merged pull request
+
+on:
+  pull_request_target:
+    branches:
+      - master
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-merged-pr
+  queue: max
+
+jobs:
+  tag-merge-commit:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create next patch tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          for attempt in 1 2 3 4 5; do
+            next_tag="$(
+              python3 -I <<'PY'
+          import os
+          import re
+          import subprocess
+
+          tags = subprocess.check_output(
+              [
+                  "gh",
+                  "api",
+                  "--paginate",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/tags?per_page=100",
+                  "--jq",
+                  ".[].name",
+              ],
+              text=True,
+          ).splitlines()
+          stable_tag = re.compile(
+              r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+          )
+          versions = [
+              tuple(map(int, match.groups()))
+              for tag in tags
+              if (match := stable_tag.fullmatch(tag))
+          ]
+          major, minor, patch = max(versions, default=(0, 0, 0))
+          print(f"v{major}.{minor}.{patch + 1}")
+          PY
+            )"
+
+            tag_object_sha="$(
+              jq -n \
+                --arg tag "$next_tag" \
+                --arg message "Release $next_tag" \
+                --arg object "$MERGE_COMMIT_SHA" \
+                --arg date "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" \
+                '{
+                  tag: $tag,
+                  message: $message,
+                  object: $object,
+                  type: "commit",
+                  tagger: {
+                    name: "github-actions[bot]",
+                    email: "41898282+github-actions[bot]@users.noreply.github.com",
+                    date: $date
+                  }
+                }' |
+                gh api --method POST "repos/$GITHUB_REPOSITORY/git/tags" \
+                  --input - --jq .sha
+            )"
+
+            if jq -n \
+              --arg ref "refs/tags/$next_tag" \
+              --arg sha "$tag_object_sha" \
+              '{ref: $ref, sha: $sha}' |
+              gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                --input - >/dev/null; then
+              echo "Created $next_tag at $MERGE_COMMIT_SHA"
+              exit 0
+            fi
+
+            remote_object_sha="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$next_tag" \
+                --jq .object.sha 2>/dev/null || true
+            )"
+            remote_commit_sha="$remote_object_sha"
+            if [[ -n "$remote_object_sha" && "$remote_object_sha" != "$MERGE_COMMIT_SHA" ]]; then
+              remote_commit_sha="$(
+                gh api "repos/$GITHUB_REPOSITORY/git/tags/$remote_object_sha" \
+                  --jq .object.sha 2>/dev/null || true
+              )"
+            fi
+            if [[ "$remote_commit_sha" == "$MERGE_COMMIT_SHA" ]]; then
+              echo "Created $next_tag at $MERGE_COMMIT_SHA"
+              exit 0
+            fi
+
+            sleep "$attempt"
+          done
+
+          echo "Failed to create a unique patch tag after 5 attempts" >&2
+          exit 1
